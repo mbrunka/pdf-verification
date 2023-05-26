@@ -1,36 +1,43 @@
 import hashlib
-from rsa import *
-from wave import open as open_wave
+import os
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.exceptions import InvalidSignature
-from os import listdir, path
+from wave import open as open_wave
 from trng import trng_generate
 from sympy import prevprime, nextprime
 from random import randint
 
-
-# TEST PURPOSES ONLY !!!!!!!!!!!!!!!!!!!!!!!!!!
-SOUND_FILE_PATH = "data/sound-samples/test.wav"
-
+# Paths and folders
 DATA_FOLDER = "data"
 KEYS_FOLDER = "keys"
 SIGN_FOLDER = "signatures"
 
 PUBLIC_KEY_FILE = "public_key.pem"
-PUBLIC_KEY_FILE_PATH = path.join(DATA_FOLDER, KEYS_FOLDER, PUBLIC_KEY_FILE)
+PUBLIC_KEY_FILE_PATH = os.path.join(DATA_FOLDER, KEYS_FOLDER, PUBLIC_KEY_FILE)
 
 PRIVATE_KEY_FILE = "private_key.pem"
-PRIVATE_KEY_FILE_PATH = path.join(DATA_FOLDER, KEYS_FOLDER, PRIVATE_KEY_FILE)
+PRIVATE_KEY_FILE_PATH = os.path.join(DATA_FOLDER, KEYS_FOLDER, PRIVATE_KEY_FILE)
+
+# Sound file path (for test purposes only)
+SOUND_FILE_PATH = "data/sound-samples/test.wav"
 
 
 def get_trng(sound_file_path):
+    """
+    Generate random numbers using True Random Number Generator (TRNG).
+
+    Args:
+        sound_file_path (str): Path to the sound file.
+
+    Returns:
+        list: List of random integers generated from the sound file.
+    """
     # Open the wave file and read the binary data
     w = open_wave(sound_file_path, "rb")
     if w is None:
         raise FileNotFoundError("Error: Unable to open file")
-        exit()
 
     nframes = w.getnframes()
     # Read the audio data as a string of bytes
@@ -41,6 +48,13 @@ def get_trng(sound_file_path):
 
 
 def new_keys(sound_file):
+    """
+    Generate new RSA key pair and save them to files.
+
+    Args:
+        sound_file (str): Path to the sound file for generating random numbers.
+    """
+
     def generate_prime(random_ints):
         while True:
             num = random_ints.pop(randint(0, len(random_ints) - 1))
@@ -104,13 +118,17 @@ def new_keys(sound_file):
 
 
 def get_private_numbers():
+    """
+    Retrieve the private key numbers from the private key file.
+
+    Returns:
+        RSAPrivateNumbers: Private key numbers.
+    """
     try:
-        f = open(PRIVATE_KEY_FILE_PATH, "rb")
-        key_pem = f.read()
-        f.close()
-    except:
+        with open(PRIVATE_KEY_FILE_PATH, "rb") as f:
+            key_pem = f.read()
+    except FileNotFoundError:
         raise FileNotFoundError("Error: private key not found")
-        exit()
 
     private_key = serialization.load_pem_private_key(
         key_pem, password=None, backend=default_backend()
@@ -120,13 +138,17 @@ def get_private_numbers():
 
 
 def get_public_numbers():
+    """
+    Retrieve the public key numbers from the public key file.
+
+    Returns:
+        RSAPublicNumbers: Public key numbers.
+    """
     try:
-        f = open(PUBLIC_KEY_FILE_PATH, "rb")
-        key_pem = f.read()
-        f.close()
-    except:
+        with open(PUBLIC_KEY_FILE_PATH, "rb") as f:
+            key_pem = f.read()
+    except FileNotFoundError:
         raise FileNotFoundError("Error: public key not found")
-        exit()
 
     public_key = serialization.load_pem_public_key(key_pem, backend=default_backend())
     public_numbers = public_key.public_numbers()
@@ -134,6 +156,15 @@ def get_public_numbers():
 
 
 def gen_hash(file_path):
+    """
+    Generate the SHA-3 hash of a file.
+
+    Args:
+        file_path (str): Path to the file.
+
+    Returns:
+        bytes: SHA-3 hash value.
+    """
     # Read the contents of the file
     with open(file_path, "rb") as file:
         content = file.read()
@@ -144,30 +175,42 @@ def gen_hash(file_path):
     return sha3_hash
 
 
-# ------------------------------------------------------
 def sign_file(pdf_file_path):
+    """
+    Sign a PDF file using RSA private key.
+
+    Args:
+        pdf_file_path (str): Path to the PDF file.
+    """
     # Get file hash
-    print("Signing file: " + pdf_file_path)
     hash_value = gen_hash(pdf_file_path)
 
-    # get private key
+    # Get private key
     private_key = get_private_numbers().private_key(default_backend())
-    print("Private key has been loaded")
+
     # Sign the file hash
     signature = private_key.sign(hash_value, padding.PKCS1v15(), hashes.SHA3_256())
-    print("signature has been generated")
 
     # Write signature to .dat file
-    sign_file_path = "data/signatures/sign.dat"
+    sign_file_path = os.path.join(DATA_FOLDER, SIGN_FOLDER, "sign.dat")
     with open(sign_file_path, "wb") as sign_file:
         sign_file.write(signature)
-    print("File has been signed")
+    return True
 
 
 def check_signature(signature_file_path, pdf_file_path, public_key_path):
-    if not path.exists(signature_file_path):
+    """
+    Check the signature of a PDF file using RSA public key.
+
+    Args:
+        signature_file_path (str): Path to the signature file.
+        pdf_file_path (str): Path to the PDF file.
+        public_key_path (str): Path to the public key file.
+    """
+    if not os.path.exists(signature_file_path):
         print("Error: signature file not found")
-        exit()
+        return
+
     with open(signature_file_path, "rb") as signature_file:
         signature = signature_file.read()
 
@@ -179,6 +222,6 @@ def check_signature(signature_file_path, pdf_file_path, public_key_path):
     # Verify the signature
     try:
         public_key.verify(signature, file_hash, padding.PKCS1v15(), hashes.SHA3_256())
-        print("Signature is valid.")
+        return True
     except InvalidSignature:
-        print("Signature is invalid.")
+        return False

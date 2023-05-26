@@ -11,7 +11,7 @@ publickey_file_path = ""
 # Create the main window
 window = tk.Tk()
 window.title("Hacker Tool")
-window.geometry("500x280")
+window.geometry("500x400")
 
 # Set custom colors
 background_color = "#282C34"
@@ -30,34 +30,66 @@ window.option_add("*Font", "Arial 10")
 def choose_pdf_file():
     global pdf_file_path
     pdf_file_path = filedialog.askopenfilename(filetypes=[("PDF Files", "*.pdf")])
-    pdf_button.config(text=pdf_file_path)  # Update button text with file path
+    if pdf_file_path != "":
+        pdf_button.config(text=pdf_file_path)  # Update button text with file path
 
 
 # Function to choose sign file
 def choose_sign_file():
     global sign_file_path
     sign_file_path = filedialog.askopenfilename(filetypes=[("DAT Files", "*.dat")])
-    sign_button.config(text=sign_file_path)  # Update button text with file path
+    if sign_file_path != "":
+        sign_button.config(text=sign_file_path)  # Update button text with file path
 
 
 # Function to choose public key file
 def choose_publickey_file():
     global publickey_file_path
     publickey_file_path = filedialog.askopenfilename(filetypes=[("PEM Files", "*.pem")])
-    publickey_button.config(
-        text=publickey_file_path
-    )  # Update button text with file path
+    if publickey_file_path != "":
+        publickey_button.config(
+            text=publickey_file_path
+        )  # Update button text with file path
 
 
 # Function to generate
 def generate():
-    new_keys(SOUND_FILE_PATH)
-    sign_file(pdf_file_path)
+    try:
+        new_keys(SOUND_FILE_PATH)
+        success_code = sign_file(pdf_file_path)
+        generate_message(success_code)
+    except FileNotFoundError:
+        generate_message(False)
+
+
+def generate_message(success_code):
+    log_listbox.insert(
+        tk.END, "\n--------------- GENERATION MESSAGE ---------------\n\n"
+    )
+    if success_code:
+        log_listbox.insert(tk.END, "Generation completed successfully.\n")
+    else:
+        log_listbox.insert(
+            tk.END, "Generation failed. Check if all paths are correct.\n"
+        )
 
 
 # Function to verify
 def verify():
-    check_signature(sign_file_path, pdf_file_path, publickey_file_path)
+    success_code = check_signature(sign_file_path, pdf_file_path, publickey_file_path)
+    verify_message(success_code)
+
+
+def verify_message(success_code):
+    log_listbox.insert(
+        tk.END, "\n--------------- VERIFICATION MESSAGE ---------------\n\n"
+    )
+    if success_code:
+        log_listbox.insert(tk.END, "Verification successful.\n")
+    elif sign_file_path == "" and publickey_file_path == "" and pdf_file_path == "":
+        log_listbox.insert(tk.END, "Check if all paths are correct and filled.\n")
+    else:
+        log_listbox.insert(tk.END, "Verification failed.\n")
 
 
 # Function to hide buttons
@@ -67,6 +99,7 @@ def hide_buttons():
     publickey_button.pack_forget()
     confirm_ver_button.pack_forget()
     confirm_gen_button.pack_forget()
+    log_listbox.pack_forget()
 
 
 # Function to show buttons
@@ -77,7 +110,7 @@ def show_buttons(buttons):
 
 # Menu screen
 menu_frame = tk.Frame(window, bg=menu_background_color)
-menu_frame.pack(pady=10)
+menu_frame.pack(pady=10, fill=tk.X)
 
 # Menu option variable
 menu_option = tk.StringVar()
@@ -86,9 +119,17 @@ menu_option = tk.StringVar()
 def menu_option_changed():
     hide_buttons()
     if menu_option.get() == "Generate":
-        show_buttons([pdf_button, confirm_gen_button])
+        show_buttons([pdf_button, confirm_gen_button, log_listbox])
     elif menu_option.get() == "Verify":
-        show_buttons([pdf_button, sign_button, publickey_button, confirm_ver_button])
+        show_buttons(
+            [
+                pdf_button,
+                sign_button,
+                publickey_button,
+                confirm_ver_button,
+                log_listbox,
+            ]
+        )
 
 
 generate_button = tk.Radiobutton(
@@ -128,7 +169,7 @@ exit_button = tk.Button(
     activebackground=button_hover_color,
     activeforeground=button_font_color,
 )
-exit_button.pack(side=tk.LEFT, padx=5)
+exit_button.pack(side=tk.RIGHT, padx=5)
 
 # Separating line
 line = tk.Frame(window, bg=line_color, height=2)
@@ -177,7 +218,7 @@ confirm_gen_button = tk.Button(
     activebackground=button_hover_color,
     activeforeground=button_font_color,
 )
-# Confirm VERYFICATION Button
+# Confirm VERIFICATION Button
 confirm_ver_button = tk.Button(
     window,
     text="Confirm",
@@ -187,6 +228,10 @@ confirm_ver_button = tk.Button(
     activebackground=button_hover_color,
     activeforeground=button_font_color,
 )
+
+# Log Listbox
+log_listbox = tk.Listbox(window, bg=background_color, fg=button_font_color, width=40)
+log_listbox.pack(fill=tk.BOTH, expand=True)
 
 # Start with menu screen
 show_buttons([generate_button, verify_button, exit_button])
