@@ -96,4 +96,5 @@ def trng_generate(audio_data, N=1024, L=8):
             if bajt != 0:
                 bajty_z_O.append(bajt)
 
+    # print(len(bajty_z_O))
     return bajty_z_O
