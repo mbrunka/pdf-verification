@@ -14,14 +14,15 @@ from random import randint
 # TEST PURPOSES ONLY !!!!!!!!!!!!!!!!!!!!!!!!!!
 SOUND_FILE_PATH = "data/sound-samples/test.wav"
 
+DATA_FOLDER = "data"
 KEYS_FOLDER = "keys"
+SIGN_FOLDER = "signatures"
+
 PUBLIC_KEY_FILE = "public_key.pem"
-PUBLIC_KEY_FILE_PATH = path.join(KEYS_FOLDER, PUBLIC_KEY_FILE)
+PUBLIC_KEY_FILE_PATH = path.join(DATA_FOLDER, KEYS_FOLDER, PUBLIC_KEY_FILE)
+
 PRIVATE_KEY_FILE = "private_key.pem"
-PRIVATE_KEY_FILE_PATH = path.join(KEYS_FOLDER, PRIVATE_KEY_FILE)
-
-
-print(PUBLIC_KEY_FILE_PATH)
+PRIVATE_KEY_FILE_PATH = path.join(DATA_FOLDER, KEYS_FOLDER, PRIVATE_KEY_FILE)
 
 
 def get_trng(sound_file_path):
@@ -40,78 +41,66 @@ def get_trng(sound_file_path):
 
 
 def new_keys(sound_file):
-    def gen_key_params(key_length=1024, e=65537):
-        # Generate p and q values
-        def generate_prime(random_ints):
-            while True:
-                index = randint(0, len(random_ints) - 1)
-                num = random_ints[index]
-                if num >= 128:
-                    return num, index
+    def generate_prime(random_ints):
+        while True:
+            num = random_ints.pop(randint(0, len(random_ints) - 1))
+            if num >= 128:
+                return num
 
-        # list of random integers
-        random_ints = get_trng(sound_file)
+    # Generate p and q values
+    random_ints = get_trng(sound_file)
+    KEY_LENGTH = 1024
+    E = 65537
 
-        p = 0
-        q = 0
+    p = 0
+    q = 0
 
-        for _ in range(key_length // 8):
-            num, index = generate_prime(random_ints)
-            p = (p << 8) + num
-            random_ints.pop(index)
+    for _ in range(KEY_LENGTH // 8):
+        p = (p << 8) + generate_prime(random_ints)
 
-        for _ in range(key_length // 8):
-            num, index = generate_prime(random_ints)
-            q = (q << 8) + num
-            random_ints.pop(index)
+    for _ in range(KEY_LENGTH // 8):
+        q = (q << 8) + generate_prime(random_ints)
 
-        # Make sure that p and q are prime numbers
-        p = prevprime(p)
-        q = nextprime(q)
+    # Make sure that p and q are prime numbers
+    p = prevprime(p)
+    q = nextprime(q)
 
-        # Compute private exponent - d
-        n = p * q
-        phi_n = (p - 1) * (q - 1)
-        d = pow(e, -1, phi_n)
+    # Compute private exponent - d
+    n = p * q
+    phi_n = (p - 1) * (q - 1)
+    d = pow(E, -1, phi_n)
 
-        public_numbers = rsa.RSAPublicNumbers(e=e, n=n)
-        private_numbers = rsa.RSAPrivateNumbers(
-            p=p,
-            q=q,
-            d=d,
-            dmp1=d % (p - 1),
-            dmq1=d % (q - 1),
-            iqmp=pow(q, -1, p),
-            public_numbers=public_numbers,
-        )
+    public_numbers = rsa.RSAPublicNumbers(e=E, n=n)
+    private_numbers = rsa.RSAPrivateNumbers(
+        p=p,
+        q=q,
+        d=d,
+        dmp1=d % (p - 1),
+        dmq1=d % (q - 1),
+        iqmp=pow(q, -1, p),
+        public_numbers=public_numbers,
+    )
 
-        private_key = private_numbers.private_key(default_backend())
-        return private_key, private_key.public_key()
-
-    private_numbers, public_numbers = gen_key_params(rdat)
-    print("Keys has been generated")
+    private_key = private_numbers.private_key(default_backend())
+    print("Keys have been generated")
 
     # Write public_key to file
-    public_key_file = open(PUBLIC_KEY_FILE_PATH, "wb")
     public_key = public_numbers.public_key(default_backend())
     public_key_pem = public_key.public_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
-    public_key_file.write(public_key_pem)
-    public_key_file.close()
+    with open(PUBLIC_KEY_FILE_PATH, "wb") as public_key_file:
+        public_key_file.write(public_key_pem)
 
     # Write private_key to file
-    private_key_file = open(PRIVATE_KEY_FILE_PATH, "wb")
-    private_key_pem = private_numbers.private_bytes(
+    private_key_pem = private_key.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    private_key_file.write(private_key_pem)
-    private_key_file.close()
-
-    return public_key, private_key
+    with open(PRIVATE_KEY_FILE_PATH, "wb") as private_key_file:
+        private_key_file.write(private_key_pem)
 
 
 def get_private_numbers():
@@ -150,23 +139,46 @@ def gen_hash(file_path):
         content = file.read()
 
     # Generate the SHA-3 hash
-    sha3_hash = hashlib.sha3_256(content).hexdigest()
+    sha3_hash = hashlib.sha3_256(content).digest()
 
     return sha3_hash
 
 
-public_key, private_key = new_keys(SOUND_FILE_PATH)
-hash_value = gen_hash()
+# ------------------------------------------------------
+def sign_file(pdf_file_path):
+    # Get file hash
+    print("Signing file: " + pdf_file_path)
+    hash_value = gen_hash(pdf_file_path)
 
-# Generate RSA key pair
-public_key, private_key = rsa.newkeys(2048)
+    # get private key
+    private_key = get_private_numbers().private_key(default_backend())
+    print("Private key has been loaded")
+    # Sign the file hash
+    signature = private_key.sign(hash_value, padding.PKCS1v15(), hashes.SHA3_256())
+    print("signature has been generated")
 
-# Encrypt the hash using the RSA private key
-encrypted_hash = rsa.encrypt(hash_value.encode(), private_key)
+    # Write signature to .dat file
+    sign_file_path = "data/signatures/sign.dat"
+    with open(sign_file_path, "wb") as sign_file:
+        sign_file.write(signature)
+    print("File has been signed")
 
-# Decrypt the encrypted hash using the RSA private key
-decrypted_hash = rsa.decrypt(encrypted_hash, private_key)
 
-# Print or use the hash values as desired
-print("Original Hash: ", hash_value)
-print("Decrypted Hash: ", decrypted_hash)
+def check_signature(signature_file_path, pdf_file_path, public_key_path):
+    if not path.exists(signature_file_path):
+        print("Error: signature file not found")
+        exit()
+    with open(signature_file_path, "rb") as signature_file:
+        signature = signature_file.read()
+
+    public_key = get_public_numbers().public_key(default_backend())
+
+    # Calculate hash of the file
+    file_hash = gen_hash(pdf_file_path)
+
+    # Verify the signature
+    try:
+        public_key.verify(signature, file_hash, padding.PKCS1v15(), hashes.SHA3_256())
+        print("Signature is valid.")
+    except InvalidSignature:
+        print("Signature is invalid.")
