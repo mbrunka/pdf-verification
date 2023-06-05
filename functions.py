@@ -17,9 +17,6 @@ SIGN_FOLDER = "signatures"
 PUBLIC_KEY_FILE = "public_key.pem"
 PUBLIC_KEY_FILE_PATH = os.path.join(DATA_FOLDER, KEYS_FOLDER, PUBLIC_KEY_FILE)
 
-PRIVATE_KEY_FILE = "private_key.pem"
-PRIVATE_KEY_FILE_PATH = os.path.join(DATA_FOLDER, KEYS_FOLDER, PRIVATE_KEY_FILE)
-
 # Sound file path (for test purposes only)
 SOUND_FILE_PATH = "data/sound-samples/test.wav"
 
@@ -49,31 +46,28 @@ def get_trng(sound_file_path):
 
 def new_keys(sound_file):
     """
-    Generate new RSA key pair and save them to files.
+    Generate new RSA key pair and save public key to file and return private key.
 
     Args:
         sound_file (str): Path to the sound file for generating random numbers.
-    """
 
-    def generate_prime(random_ints):
-        while True:
-            num = random_ints.pop(randint(0, len(random_ints) - 1))
-            if num >= 128:
-                return num
+    Returns:
+        private_key (cryptography.hazmat.backends.openssl.rsa._RSAPrivateKey): Private key.
+    """
 
     # Generate p and q values
     random_ints = get_trng(sound_file)
-    KEY_LENGTH = 1024
+    KEY_LENGTH = 512
     E = 65537
 
     p = 0
     q = 0
 
     for _ in range(KEY_LENGTH // 8):
-        p = (p << 8) + generate_prime(random_ints)
+        p = (p << 8) + random_ints.pop()
 
     for _ in range(KEY_LENGTH // 8):
-        q = (q << 8) + generate_prime(random_ints)
+        q = (q << 8) + random_ints.pop()
 
     # Make sure that p and q are prime numbers
     p = prevprime(p)
@@ -107,14 +101,8 @@ def new_keys(sound_file):
     with open(PUBLIC_KEY_FILE_PATH, "wb") as public_key_file:
         public_key_file.write(public_key_pem)
 
-    # Write private_key to file
-    private_key_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    with open(PRIVATE_KEY_FILE_PATH, "wb") as private_key_file:
-        private_key_file.write(private_key_pem)
+    # return private_key for function sign_file
+    return private_key
 
 
 def get_private_numbers():
@@ -137,24 +125,6 @@ def get_private_numbers():
     return private_numbers
 
 
-def get_public_numbers():
-    """
-    Retrieve the public key numbers from the public key file.
-
-    Returns:
-        RSAPublicNumbers: Public key numbers.
-    """
-    try:
-        with open(PUBLIC_KEY_FILE_PATH, "rb") as f:
-            key_pem = f.read()
-    except FileNotFoundError:
-        raise FileNotFoundError("Error: public key not found")
-
-    public_key = serialization.load_pem_public_key(key_pem, backend=default_backend())
-    public_numbers = public_key.public_numbers()
-    return public_numbers
-
-
 def gen_hash(file_path):
     """
     Generate the SHA-3 hash of a file.
@@ -175,18 +145,19 @@ def gen_hash(file_path):
     return sha3_hash
 
 
-def sign_file(pdf_file_path):
+def sign_file(pdf_file_path, private_key):
     """
     Sign a PDF file using RSA private key.
 
     Args:
         pdf_file_path (str): Path to the PDF file.
+        private_key (RSAPrivateKey): RSA private key. Generated from new_keys function.
     """
     # Get file hash
     hash_value = gen_hash(pdf_file_path)
 
     # Get private key
-    private_key = get_private_numbers().private_key(default_backend())
+    # private_key = private_key.private_key(default_backend())
 
     # Sign the file hash
     signature = private_key.sign(hash_value, padding.PKCS1v15(), hashes.SHA3_256())
@@ -214,7 +185,7 @@ def check_signature(signature_file_path, pdf_file_path, public_key_path):
     with open(signature_file_path, "rb") as signature_file:
         signature = signature_file.read()
 
-    public_key = get_public_numbers().public_key(default_backend())
+    public_key = get_public_numbers(public_key_path).public_key(default_backend())
 
     # Calculate hash of the file
     file_hash = gen_hash(pdf_file_path)

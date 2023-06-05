@@ -55,8 +55,7 @@ def choose_publickey_file():
 # Function to generate
 def generate():
     try:
-        new_keys(SOUND_FILE_PATH)
-        success_code = sign_file(pdf_file_path)
+        success_code = sign_file(pdf_file_path, new_keys(SOUND_FILE_PATH))
         generate_message(success_code)
     except FileNotFoundError:
         generate_message(False)
@@ -230,7 +229,7 @@ confirm_ver_button = tk.Button(
 )
 
 # Log Listbox
-log_listbox = tk.Listbox(window, bg=background_color, fg=button_font_color, width=40)
+log_listbox = tk.Listbox(window, bg="#2B2F3A", fg=button_font_color, width=40)
 log_listbox.pack(fill=tk.BOTH, expand=True)
 
 # Start with menu screen
