@@ -55,18 +55,21 @@ def choose_publickey_file():
 # Function to generate
 def generate():
     try:
-        success_code = sign_file(pdf_file_path, new_keys(SOUND_FILE_PATH))
-        generate_message(success_code)
+        success_code, location = sign_file(pdf_file_path, new_keys(SOUND_FILE_PATH))
+        generate_message(success_code, location)
     except FileNotFoundError:
         generate_message(False)
 
 
-def generate_message(success_code):
+def generate_message(success_code, location):
     log_listbox.insert(
         tk.END, "\n--------------- GENERATION MESSAGE ---------------\n\n"
     )
     if success_code:
         log_listbox.insert(tk.END, "Generation completed successfully.\n")
+        log_listbox.insert(tk.END, "Signature path: " + location[0] + "\n")
+        log_listbox.insert(tk.END, "Public key path: " + location[1] + "\n")
+
     else:
         log_listbox.insert(
             tk.END, "Generation failed. Check if all paths are correct.\n"

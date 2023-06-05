@@ -105,24 +105,22 @@ def new_keys(sound_file):
     return private_key
 
 
-def get_private_numbers():
+def get_public_numbers(public_key_file=PUBLIC_KEY_FILE_PATH):
     """
-    Retrieve the private key numbers from the private key file.
+    Retrieve the public key numbers from the public key file.
 
     Returns:
-        RSAPrivateNumbers: Private key numbers.
+        RSAPublicNumbers: Public key numbers.
     """
     try:
-        with open(PRIVATE_KEY_FILE_PATH, "rb") as f:
+        with open(public_key_file, "rb") as f:
             key_pem = f.read()
     except FileNotFoundError:
-        raise FileNotFoundError("Error: private key not found")
+        raise FileNotFoundError("Error: public key not found")
 
-    private_key = serialization.load_pem_private_key(
-        key_pem, password=None, backend=default_backend()
-    )
-    private_numbers = private_key.private_numbers()
-    return private_numbers
+    public_key = serialization.load_pem_public_key(key_pem, backend=default_backend())
+    public_numbers = public_key.public_numbers()
+    return public_numbers
 
 
 def gen_hash(file_path):
@@ -166,7 +164,7 @@ def sign_file(pdf_file_path, private_key):
     sign_file_path = os.path.join(DATA_FOLDER, SIGN_FOLDER, "sign.dat")
     with open(sign_file_path, "wb") as sign_file:
         sign_file.write(signature)
-    return True
+    return True, [sign_file_path, PUBLIC_KEY_FILE_PATH]
 
 
 def check_signature(signature_file_path, pdf_file_path, public_key_path):
